@@ -33,7 +33,7 @@ interface ProcessingState {
 export default function App() {
   // --- State ---
   const [apiKey, setApiKey] = useState<string>(
-    import.meta.env.VITE_GEMINI_API_KEY || 
+    (import.meta as any).env?.VITE_GEMINI_API_KEY || 
     process.env.GEMINI_API_KEY || 
     ''
   );
@@ -141,13 +141,32 @@ export default function App() {
       
       let errorMessage = "An unexpected horror occurred during transmission.";
       
-      // Handle Specific Quota Errors
-      if (err.message?.includes("429") || err.message?.includes("quota")) {
-        errorMessage = "QUOTA_EXHAUSTED: The AI is currently overwhelmed by the darkness. Please wait 60 seconds before initiating the protocol again.";
-      } else if (err.message?.includes("API_KEY_INVALID")) {
-        errorMessage = "INVALID_KEY: Security credentials rejected. Check your API key in the sidebar.";
-      } else {
-        errorMessage = err.message || errorMessage;
+      try {
+        // Attempt to parse detailed error if it's JSON (sometimes returned as string by SDK)
+        const errorContent = JSON.parse(err.message || "{}");
+        if (errorContent.error?.message) {
+          const detail = errorContent.error.message;
+          if (detail.includes("limit: 0")) {
+            errorMessage = "ACCESS_DENIED: Your API key's model limit is 0. This usually means image generation is restricted for your region or account type in Google AI Studio. Try a different API key or enable Imagen access.";
+          } else if (detail.includes("quota") || detail.includes("429")) {
+            errorMessage = "QUOTA_EXHAUSTED: The AI is currently overwhelmed. Please wait a moment before trying again.";
+          } else {
+            errorMessage = detail;
+          }
+        }
+      } catch {
+        // Fallback for non-JSON error messages
+        if (err.message?.includes("429") || err.message?.includes("quota")) {
+          if (err.message.includes("limit: 0")) {
+            errorMessage = "ACCESS_DENIED: Model quota is 0. This model might be restricted for your account or region. Check Google AI Studio settings.";
+          } else {
+            errorMessage = "QUOTA_EXHAUSTED: The AI is currently overwhelmed by the darkness. Please wait 60 seconds before initiating the protocol again.";
+          }
+        } else if (err.message?.includes("API_KEY_INVALID")) {
+          errorMessage = "INVALID_KEY: Security credentials rejected. Check your API key in the sidebar.";
+        } else {
+          errorMessage = err.message || errorMessage;
+        }
       }
 
       setProcessing(prev => ({ 
