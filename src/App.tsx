@@ -32,7 +32,11 @@ interface ProcessingState {
 
 export default function App() {
   // --- State ---
-  const [apiKey, setApiKey] = useState<string>(process.env.GEMINI_API_KEY || '');
+  const [apiKey, setApiKey] = useState<string>(
+    import.meta.env.VITE_GEMINI_API_KEY || 
+    process.env.GEMINI_API_KEY || 
+    ''
+  );
   const [imageBefore, setImageBefore] = useState<string | null>(null);
   const [imageAfter, setImageAfter] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -133,9 +137,22 @@ export default function App() {
       }
 
     } catch (err: any) {
+      console.error("Horror Transmutation Error:", err);
+      
+      let errorMessage = "An unexpected horror occurred during transmission.";
+      
+      // Handle Specific Quota Errors
+      if (err.message?.includes("429") || err.message?.includes("quota")) {
+        errorMessage = "QUOTA_EXHAUSTED: The AI is currently overwhelmed by the darkness. Please wait 60 seconds before initiating the protocol again.";
+      } else if (err.message?.includes("API_KEY_INVALID")) {
+        errorMessage = "INVALID_KEY: Security credentials rejected. Check your API key in the sidebar.";
+      } else {
+        errorMessage = err.message || errorMessage;
+      }
+
       setProcessing(prev => ({ 
         ...prev, 
-        error: err.message || "An unexpected horror occurred during transmission.", 
+        error: errorMessage, 
         isAnalyzing: false, 
         isGenerating: false 
       }));
