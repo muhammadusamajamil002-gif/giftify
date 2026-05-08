@@ -32,11 +32,7 @@ interface ProcessingState {
 
 export default function App() {
   // --- State ---
-  const [apiKey, setApiKey] = useState<string>(
-    (import.meta as any).env?.VITE_GEMINI_API_KEY || 
-    process.env.GEMINI_API_KEY || 
-    ''
-  );
+  const [apiKey, setApiKey] = useState<string>(process.env.GEMINI_API_KEY || '');
   const [imageBefore, setImageBefore] = useState<string | null>(null);
   const [imageAfter, setImageAfter] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -104,9 +100,10 @@ export default function App() {
 
       setProcessing(prev => ({ ...prev, isAnalyzing: false, isGenerating: true, currentPrompt: generatedPrompt }));
 
-      // Step 2: Generate Horror Image using gemini-2.5-flash-image
+      // Step 2: Generate Horror Image using gemini-3.1-flash-image-preview
+      // We use 3.1 for better quality and different quota buckets
       const generationResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-3.1-flash-image-preview',
         contents: {
           parts: [
             {
@@ -120,6 +117,12 @@ export default function App() {
             },
           ],
         },
+        config: {
+          imageConfig: {
+            aspectRatio: "1:1",
+            imageSize: "1K"
+          }
+        }
       });
 
       let foundImage = false;
@@ -142,31 +145,26 @@ export default function App() {
       let errorMessage = "An unexpected horror occurred during transmission.";
       
       try {
-        // Attempt to parse detailed error if it's JSON (sometimes returned as string by SDK)
-        const errorContent = JSON.parse(err.message || "{}");
-        if (errorContent.error?.message) {
-          const detail = errorContent.error.message;
-          if (detail.includes("limit: 0")) {
-            errorMessage = "ACCESS_DENIED: Your API key's model limit is 0. This usually means image generation is restricted for your region or account type in Google AI Studio. Try a different API key or enable Imagen access.";
-          } else if (detail.includes("quota") || detail.includes("429")) {
-            errorMessage = "QUOTA_EXHAUSTED: The AI is currently overwhelmed. Please wait a moment before trying again.";
-          } else {
-            errorMessage = detail;
-          }
+        // Attempt to parse detailed error if it's JSON
+        let detail = "";
+        try {
+          const errorContent = JSON.parse(err.message || "{}");
+          detail = errorContent.error?.message || "";
+        } catch {
+          detail = err.message || "";
         }
-      } catch {
-        // Fallback for non-JSON error messages
-        if (err.message?.includes("429") || err.message?.includes("quota")) {
-          if (err.message.includes("limit: 0")) {
-            errorMessage = "ACCESS_DENIED: Model quota is 0. This model might be restricted for your account or region. Check Google AI Studio settings.";
-          } else {
-            errorMessage = "QUOTA_EXHAUSTED: The AI is currently overwhelmed by the darkness. Please wait 60 seconds before initiating the protocol again.";
-          }
+
+        if (detail.includes("limit: 0")) {
+          errorMessage = "ACCESS_DENIED: Model quota is 0. Image generation (Imagen) is likely restricted for your region (e.g., EU/UK/EEA) or account type in the Free Tier. Try using a VPN or check Google AI Studio regional availability.";
+        } else if (detail.includes("quota") || detail.includes("429")) {
+          errorMessage = "QUOTA_EXHAUSTED: The AI is currently overwhelmed. Please wait 60 seconds before retrying.";
         } else if (err.message?.includes("API_KEY_INVALID")) {
           errorMessage = "INVALID_KEY: Security credentials rejected. Check your API key in the sidebar.";
         } else {
-          errorMessage = err.message || errorMessage;
+          errorMessage = detail || errorMessage;
         }
+      } catch (innerErr) {
+        errorMessage = err.message || errorMessage;
       }
 
       setProcessing(prev => ({ 
