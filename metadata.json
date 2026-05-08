@@ -1,0 +1,6 @@
+{
+  "name": "Horror Haven: Sci-Fi Image Transformer",
+  "description": "Transform your photos into cinematic horror scenes using Gemini AI. Upload a photo and watch it mutate into a terrifying sci-fi horror masterpiece.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["image_processing", "ai_generation"]
+}
